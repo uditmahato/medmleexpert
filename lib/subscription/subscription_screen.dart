@@ -3,6 +3,8 @@ import 'package:purchases_flutter/purchases_flutter.dart';
 import 'subscription_service.dart'; // Updated import
 
 class SubscriptionScreen extends StatelessWidget {
+  const SubscriptionScreen({super.key});
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(

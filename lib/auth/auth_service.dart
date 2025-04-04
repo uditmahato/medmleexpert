@@ -1,12 +1,15 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:shared_preferences/shared_preferences.dart'; // Import shared_preferences
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
+  // Stream to listen to auth state changes
   Stream<User?> get user {
     return _auth.authStateChanges();
   }
 
+  // Sign in with email and password
   Future<User?> signInWithEmailAndPassword(
     String email,
     String password,
@@ -18,28 +21,25 @@ class AuthService {
       );
       return result.user;
     } catch (e) {
-      print(e.toString());
-      return null;
+      print("Sign-in error: $e");
+      rethrow;
     }
   }
 
-  Future<User?> registerWithEmailAndPassword(
-    String email,
-    String password,
-  ) async {
-    try {
-      UserCredential result = await _auth.createUserWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
-      return result.user;
-    } catch (e) {
-      print(e.toString());
-      return null;
-    }
-  }
-
+  // Sign out
   Future<void> signOut() async {
-    await _auth.signOut();
+    try {
+      // Clear local data
+      SharedPreferences prefs = await SharedPreferences.getInstance();
+      await prefs.clear(); // Clear all data in shared_preferences
+      print("Local data cleared successfully");
+
+      // Sign out from Firebase
+      await _auth.signOut();
+      print("User signed out successfully");
+    } catch (e) {
+      print("Sign-out error: $e");
+      rethrow;
+    }
   }
 }
