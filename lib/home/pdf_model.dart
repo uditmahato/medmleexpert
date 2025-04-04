@@ -1,27 +1,26 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class PdfModel {
-  final String id;
   final String title;
   final String url;
-  final String? size; // New field for size
-  final String? date; // New field for date
+  final String? date;
+  final String? size;
 
-  PdfModel({
-    required this.id,
-    required this.title,
-    required this.url,
-    this.size,
-    this.date,
-  });
+  PdfModel({required this.title, required this.url, this.date, this.size});
 
   factory PdfModel.fromDocument(DocumentSnapshot doc) {
+    final data = doc.data() as Map<String, dynamic>;
+    final String title = data['title'] ?? 'Unknown Title';
+    final String url = data['url'] ?? '';
+    if (url.isEmpty) {
+      print("Warning: Document ${doc.id} has an empty URL. Skipping.");
+      throw Exception("Invalid PDF document: URL is empty");
+    }
     return PdfModel(
-      id: doc.id,
-      title: doc['title'],
-      url: doc['url'],
-      size: doc['size'], // Optional field
-      date: doc['date'], // Optional field
+      title: title,
+      url: url,
+      date: data['date'],
+      size: data['size'],
     );
   }
 }

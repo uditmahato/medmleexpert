@@ -34,14 +34,17 @@ dependencies:
   firebase_auth: ^5.5.2
   cloud_firestore: ^5.6.6
   firebase_storage: ^12.4.5
-  flutter_pdfview: ^1.2.7
+  firebase_database: ^11.1.4
   file_picker: ^10.0.0
-  path_provider: ^2.1.2
   in_app_purchase: ^3.1.10
   provider: ^6.1.2
   intl: ^0.20.2
   shared_preferences: ^2.2.2
   purchases_flutter: ^8.7.0
+  flutter_pdfview: ^1.3.2    # For PDF viewing
+  http: ^1.2.2              # For downloading the PDF
+  path_provider: ^2.1.4     # For accessing temporary directory
+  url_launcher: ^6.3.1
 
 dev_dependencies:
   flutter_test:

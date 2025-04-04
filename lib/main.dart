@@ -15,11 +15,14 @@ void main() async {
       storageBucket: "medmleexpert.firebasestorage.app",
       messagingSenderId: "569834885497",
       appId: "1:569834885497:web:816817f4af71fe4787dfa8",
+      databaseURL:
+          "https://medmleexpert-default-rtdb.firebaseio.com", // Add this
     ),
   );
   runApp(MyApp());
 }
 
+// Rest of the main.dart remains the same
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
@@ -33,71 +36,56 @@ class MyApp extends StatelessWidget {
         '/home': (context) => HomeScreen(),
       },
       theme: ThemeData(
-        // Primary color for buttons, AppBar, etc.
-        primaryColor: Color(0xFF1A73E8), // Trustworthy Blue
-        // Secondary color for accents
+        primaryColor: Color(0xFF1A73E8),
         colorScheme: ColorScheme.light(
           primary: Color(0xFF1A73E8),
-          secondary: Color(0xFF4CAF50), // Calming Green
-          error: Color(0xFFD32F2F), // Error Red
-          surface: Color(0xFFF5F7FA), // Background
+          secondary: Color(0xFF4CAF50),
+          error: Color(0xFFD32F2F),
+          surface: Color(0xFFF5F7FA),
         ),
-        // Background color for Scaffold
-        scaffoldBackgroundColor: Color(0xFFF5F7FA), // Clean White
-        // AppBar theme
+        scaffoldBackgroundColor: Color(0xFFF5F7FA),
         appBarTheme: AppBarTheme(
-          backgroundColor: Color(0xFF1A73E8), // Trustworthy Blue
-          foregroundColor: Colors.white, // Text/icons on AppBar
+          backgroundColor: Color(0xFF1A73E8),
+          foregroundColor: Colors.white,
           elevation: 0,
         ),
-        // Text theme
         textTheme: TextTheme(
-          bodyLarge: TextStyle(
-            color: Color(0xFF333333),
-          ), // Dark Gray for body text
+          bodyLarge: TextStyle(color: Color(0xFF333333)),
           bodyMedium: TextStyle(color: Color(0xFF333333)),
           titleLarge: TextStyle(
             color: Color(0xFF333333),
             fontWeight: FontWeight.bold,
           ),
         ),
-        // Button theme
         elevatedButtonTheme: ElevatedButtonThemeData(
           style: ElevatedButton.styleFrom(
-            backgroundColor: Color(0xFF1A73E8), // Trustworthy Blue
-            foregroundColor: Colors.white, // Text/icon color on buttons
+            backgroundColor: Color(0xFF1A73E8),
+            foregroundColor: Colors.white,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(8),
             ),
           ),
         ),
-        // Card theme
         cardTheme: CardTheme(
           color: Colors.white,
           elevation: 2,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(8),
-            side: BorderSide(
-              color: Color(0xFFB0BEC5),
-              width: 1,
-            ), // Neutral Gray border
+            side: BorderSide(color: Color(0xFFB0BEC5), width: 1),
           ),
         ),
-        // Input decoration theme
         inputDecorationTheme: InputDecorationTheme(
           filled: true,
           fillColor: Colors.white,
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(8),
-            borderSide: BorderSide(color: Color(0xFFB0BEC5)), // Neutral Gray
+            borderSide: BorderSide(color: Color(0xFFB0BEC5)),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(8),
-            borderSide: BorderSide(
-              color: Color(0xFF1A73E8),
-            ), // Trustworthy Blue
+            borderSide: BorderSide(color: Color(0xFF1A73E8)),
           ),
-          hintStyle: TextStyle(color: Color(0xFFB0BEC5)), // Neutral Gray
+          hintStyle: TextStyle(color: Color(0xFFB0BEC5)),
         ),
       ),
     );
