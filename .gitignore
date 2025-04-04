@@ -43,3 +43,22 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+
+# Exclude Git object files (these are managed by Git internally)
+.git/objects/
+
+
+# Exclude macOS-specific generated files
+macos/Runner/Assets.xcassets/AppIcon.appiconset/app_icon_1024.png
+
+# Exclude Android Gradle wrapper files
+android/gradle/wrapper/gradle-wrapper.jar
+
+# Exclude Windows-specific resource files
+windows/runner/resources/app_icon.ico
+
+chrome-extracted/
+google-chrome-stable_current_amd64.deb*
+
+
