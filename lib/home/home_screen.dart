@@ -189,7 +189,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           indicatorColor: Color(0xFF4CAF50),
           tabs: [
             Tab(text: "NEWEST"),
-            Tab(text: "POPULAR"),
             Tab(text: "TRENDING"),
             Tab(text: "UPDATES"),
             Tab(text: "PAID"),
