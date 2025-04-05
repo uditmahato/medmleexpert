@@ -19,8 +19,8 @@ class PdfModel {
     return PdfModel(
       title: title,
       url: url,
-      date: data['date'],
-      size: data['size'],
+      date: data['date'] as String?,
+      size: data['size'] != null ? data['size'].toString() : null, // Convert here
     );
   }
 }

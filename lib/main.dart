@@ -4,21 +4,25 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'auth/auth_service.dart';
 import 'auth/login_screen.dart';
 import 'home/home_screen.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(
+  final app = await Firebase.initializeApp(
     options: const FirebaseOptions(
-      apiKey: "AIzaSyDT19wJzp9ce7T11e98S3IVMGslI9TrQFM",
-      authDomain: "medmleexpert.firebaseapp.com",
-      projectId: "medmleexpert",
-      storageBucket: "medmleexpert.firebasestorage.app",
-      messagingSenderId: "569834885497",
-      appId: "1:569834885497:web:816817f4af71fe4787dfa8",
-      databaseURL:
-          "https://medmleexpert-default-rtdb.firebaseio.com", // Add this
+	apiKey: "AIzaSyDT19wJzp9ce7T11e98S3IVMGslI9TrQFM",
+  authDomain: "medmleexpert.firebaseapp.com",
+  projectId: "medmleexpert",
+  storageBucket: "medmleexpert.appspot.com",
+  messagingSenderId: "569834885497",
+  appId: "1:569834885497:web:816817f4af71fe4787dfa8",
+  databaseURL: "https://medmleexpert.firebaseio.com"
     ),
   );
+  print("Firebase project ID: ${app.options.projectId}");
+  // Explicitly set the Firestore database to '(default)'
+  FirebaseFirestore.instance.settings = const Settings(persistenceEnabled: true);
+  print("Firestore database: ${FirebaseFirestore.instance.app.options.projectId}");
   runApp(MyApp());
 }
 
