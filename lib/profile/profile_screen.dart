@@ -1,9 +1,149 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../auth/auth_service.dart';
 import '../auth/login_screen.dart';
 import '../downloads/downloads_screen.dart';
 
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends StatefulWidget {
+  @override
+  _ProfileScreenState createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  late DateTime subscriptionEndDate;
+  late int remainingDays;
+  Timer? _timer;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    // Fetch subscription data after getting the UID
+    _fetchSubscriptionData();
+    // Update the remaining days every day
+    _timer = Timer.periodic(Duration(days: 1), (timer) {
+      _calculateRemainingDays();
+    });
+  }
+
+  Future<void> _fetchSubscriptionData() async {
+    setState(() {
+      _isLoading = true;
+    });
+    try {
+      final user = AuthService().currentUser;
+      if (user != null) {
+        final doc =
+            await FirebaseFirestore.instance
+                .collection('users')
+                .doc(user.uid)
+                .collection('subscription')
+                .doc('details')
+                .get();
+        if (doc.exists) {
+          setState(() {
+            subscriptionEndDate = DateTime.parse(doc.data()!['endDate']);
+            _calculateRemainingDays();
+            _isLoading = false;
+          });
+        } else {
+          // Default subscription end date if not found
+          setState(() {
+            subscriptionEndDate = DateTime.parse("2026-03-27");
+            _calculateRemainingDays();
+            _isLoading = false;
+          });
+          // Optionally, create a default subscription entry in Firestore
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(user.uid)
+              .collection('subscription')
+              .doc('details')
+              .set({
+                'endDate': subscriptionEndDate.toIso8601String(),
+                'package': 'Default',
+              });
+        }
+      } else {
+        // User not logged in, use default
+        setState(() {
+          subscriptionEndDate = DateTime.parse("2026-03-27");
+          _calculateRemainingDays();
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      print("Error fetching subscription data: $e");
+      setState(() {
+        subscriptionEndDate = DateTime.parse("2026-03-27");
+        _calculateRemainingDays();
+        _isLoading = false;
+      });
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("Error loading subscription: $e")));
+    }
+  }
+
+  void _calculateRemainingDays() {
+    final now = DateTime.now();
+    final difference = subscriptionEndDate.difference(now);
+    setState(() {
+      remainingDays = difference.inDays;
+      if (remainingDays < 0) remainingDays = 0; // Prevent negative days
+    });
+  }
+
+  Future<void> _extendSubscription(String package) async {
+    try {
+      final now = DateTime.now();
+      DateTime newEndDate;
+      if (package == "Biannual") {
+        // Add 6 months (approximate)
+        newEndDate = now.add(Duration(days: 6 * 30));
+      } else {
+        // Add 12 months
+        newEndDate = now.add(Duration(days: 365));
+      }
+      final user = AuthService().currentUser;
+      if (user != null) {
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .collection('subscription')
+            .doc('details')
+            .set({'endDate': newEndDate.toIso8601String(), 'package': package});
+        setState(() {
+          subscriptionEndDate = newEndDate;
+          _calculateRemainingDays();
+        });
+        print(
+          "Extended subscription with $package package. New end date: $subscriptionEndDate",
+        );
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Subscription extended successfully!")),
+        );
+      } else {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text("User not logged in")));
+      }
+    } catch (e) {
+      print("Error extending subscription: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Error extending subscription: $e")),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -34,9 +174,33 @@ class ProfileScreen extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Account Information Section
-              Text(
-                "Account Information - uditmahat",
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              StreamBuilder<User?>(
+                stream: AuthService().user,
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return Text(
+                      "Account Information - Loading...",
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    );
+                  }
+                  if (snapshot.hasData && snapshot.data != null) {
+                    final user = snapshot.data!;
+                    return Text(
+                      "Account Information - ${user.email ?? 'Unknown'}",
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    );
+                  }
+                  return Text(
+                    "Account Information - Not Logged In",
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  );
+                },
               ),
               SizedBox(height: 8),
               Card(
@@ -52,12 +216,19 @@ class ProfileScreen extends StatelessWidget {
                 ),
               ),
               Card(
-                child: ListTile(title: Text("2026-03-27 - 359 Days Remaining")),
+                child: ListTile(
+                  title:
+                      _isLoading
+                          ? Text("Loading subscription...")
+                          : Text(
+                            "${subscriptionEndDate.toString().split(' ')[0]} - $remainingDays Days Remaining",
+                          ),
+                ),
               ),
               Card(
                 child: ListTile(
                   title: Text(
-                    "Extend Subscription",
+                    "Extend Subscription - Biannual (6 Months)",
                     style: TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
@@ -65,7 +236,22 @@ class ProfileScreen extends StatelessWidget {
                   ),
                   tileColor: Color(0xFF4CAF50), // Calming Green
                   onTap: () {
-                    print("Extend Subscription tapped");
+                    _extendSubscription("Biannual");
+                  },
+                ),
+              ),
+              Card(
+                child: ListTile(
+                  title: Text(
+                    "Extend Subscription - Annual (12 Months)",
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  tileColor: Color(0xFF4CAF50), // Calming Green
+                  onTap: () {
+                    _extendSubscription("Annual");
                   },
                 ),
               ),

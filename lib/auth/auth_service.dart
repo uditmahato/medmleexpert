@@ -9,6 +9,9 @@ class AuthService {
     return _auth.authStateChanges();
   }
 
+  // Getter for the current user
+  User? get currentUser => _auth.currentUser;
+
   // Sign in with email and password
   Future<User?> signInWithEmailAndPassword(
     String email,
@@ -19,6 +22,8 @@ class AuthService {
         email: email,
         password: password,
       );
+      print("Signed in successfully: ${result.user?.uid}");
+      print("User token: ${await result.user?.getIdToken()}");
       return result.user;
     } catch (e) {
       print("Sign-in error: $e");
