@@ -45,6 +45,9 @@ dependencies:
   http: ^1.2.2              # For downloading the PDF
   path_provider: ^2.1.4     # For accessing temporary directory
   url_launcher: ^6.3.1
+  permission_handler: ^12.0.0+1
+  dio: ^5.8.0+1
+  syncfusion_flutter_pdfviewer: ^29.1.37
 
 dev_dependencies:
   flutter_test:

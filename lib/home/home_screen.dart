@@ -2,23 +2,22 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_database/firebase_database.dart';
-import 'package:http/http.dart' as http; // Import http package
-import 'package:path_provider/path_provider.dart'; // Import path_provider
-import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
 import '../auth/auth_service.dart';
 import '../downloads/downloads_screen.dart';
 import '../profile/profile_screen.dart';
 import 'pdf_model.dart';
-import 'pdf_viewer_screen.dart';
+import 'pdf_viewer_screen.dart'; // Assuming your PdfViewerScreen is in this file
 
 class HomeScreen extends StatefulWidget {
   @override
   _HomeScreenState createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMixin {
+class _HomeScreenState extends State<HomeScreen>
+    with SingleTickerProviderStateMixin {
   late TabController _tabController;
   late DatabaseReference _database;
   String _dbMessage = "Loading...";
@@ -112,36 +111,68 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     }
   }
 
-  Future<void> _downloadFile(String url, String filename) async {
-    try {
-      final http.Response response = await http.get(Uri.parse(url));
-
-      if (response.statusCode == 200) {
-        final bytes = response.bodyBytes;
-
-        // Get the device's documents directory
-        final directory = await getApplicationDocumentsDirectory();
-        final file = File('${directory.path}/$filename.pdf');
-
-        // Write the bytes to the file
-        await file.writeAsBytes(bytes);
-
-        print("File downloaded to: ${file.path}");
-        // Optionally, show a snackbar or dialog to inform the user
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Downloaded ${filename}.pdf to ${directory.path}')),
+  Future<void> _downloadFile(
+    String url,
+    String filename,
+    BuildContext context,
+  ) async {
+    print("Starting download from URL: $url");
+    int retries = 3;
+    while (retries > 0) {
+      try {
+        final encodedUrl = Uri.encodeFull(url); // Encode URL
+        final http.Response response = await http.get(
+          Uri.parse(encodedUrl),
+          headers: {
+            'User-Agent': 'Flutter-Download-App',
+            'Accept': '*/*',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Connection': 'keep-alive',
+          },
         );
-      } else {
-        print("Download failed. Status code: ${response.statusCode}");
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Download failed. Status code: ${response.statusCode}')),
-        );
+
+        if (response.statusCode == 200) {
+          final bytes = response.bodyBytes;
+          final directory = await getApplicationDocumentsDirectory();
+          final file = File('${directory.path}/$filename.pdf');
+          await file.writeAsBytes(bytes);
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('Downloaded ${filename}.pdf')));
+          return;
+        } else {
+          print("Download failed. Status code: ${response.statusCode}");
+          retries--;
+          if (retries == 0) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Download failed after multiple attempts.'),
+              ),
+            );
+          }
+        }
+      } catch (e) {
+        retries--;
+        if (retries == 0) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('Download failed: $e')));
+        }
+        await Future.delayed(Duration(seconds: 2)); // Delay before retry
       }
+    }
+  }
+
+  Future<void> downloadFile(String fileName) async {
+    try {
+      final ref = FirebaseStorage.instance.ref().child(fileName);
+      final bytes = await ref.getData();
+      final directory = await getApplicationDocumentsDirectory();
+      final file = File('${directory.path}/$fileName');
+      await file.writeAsBytes(bytes!);
+      print('Download successful: ${file.path}');
     } catch (e) {
-      print("Exception during download: $e");
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Download failed: $e')),
-      );
+      print('Error downloading file: $e');
     }
   }
 
@@ -205,119 +236,152 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             ),
           ),
           Expanded(
-            child: _isLoadingPdfs
-                ? Center(child: CircularProgressIndicator())
-                : StreamBuilder<QuerySnapshot>(
-                    stream: firestore.collection('pdfs').snapshots(),
-                    builder: (context, snapshot) {
-                      if (snapshot.hasError) {
-                        print("Firestore error: ${snapshot.error}");
-                        return Center(
-                          child: Text(
-                            "Error loading PDFs: ${snapshot.error}",
-                            style: TextStyle(color: Color(0xFFD32F2F)),
-                          ),
-                        );
-                      }
-                      if (!snapshot.hasData) {
-                        return Center(child: Text("Loading PDFs..."));
-                      }
-                      if (snapshot.connectionState == ConnectionState.waiting) {
-                        return Center(child: CircularProgressIndicator());
-                      }
-                      List<PdfModel> pdfs = [];
-                      try {
-                        pdfs = snapshot.data!.docs.map((doc) {
-                          final data = doc.data() as Map<String, dynamic>;
-                          final String originalUrl = data['url'] ?? '';
-                          final String downloadUrl = pdfDownloadUrls[doc.id] ?? originalUrl;
-                          return PdfModel(
-                            title: data['title'] ?? 'Unknown Title',
-                            url: downloadUrl.isNotEmpty ? downloadUrl : originalUrl,
-                            date: data['date'] as String?,
-                            size: data['size'] != null ? data['size'].toString() : null,
-                          );
-                        }).toList();
-                      } catch (e) {
-                        print("Error parsing PDFs: $e");
-                        return Center(
-                          child: Text(
-                            "Error parsing PDFs: $e",
-                            style: TextStyle(color: Color(0xFFD32F2F)),
-                          ),
-                        );
-                      }
-                      if (pdfs.isEmpty) {
-                        return Center(child: Text("No PDFs available"));
-                      }
-                      return ListView.builder(
-                        itemCount: pdfs.length,
-                        itemBuilder: (context, index) {
-                          PdfModel pdf = pdfs[index];
-                          return Card(
-                            margin: EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-                            child: ListTile(
-                              leading: CircleAvatar(
-                                backgroundColor: Color(0xFF1A73E8).withOpacity(0.1),
-                                child: Icon(Icons.book, color: Color(0xFF1A73E8)),
-                              ),
-                              title: Text(
-                                pdf.title,
-                                style: TextStyle(fontWeight: FontWeight.bold),
-                              ),
-                              subtitle: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  SizedBox(height: 4),
-                                  Text(pdf.date ?? "March 2025"),
-                                  Text("Size: ${pdf.size ?? 'Unknown'}"),
-                                ],
-                              ),
-trailing: Column(
-  mainAxisSize: MainAxisSize.min, // Makes the column take only the space needed
-  children: <Widget>[
-    // View Button
-    Flexible(
-      child: ElevatedButton(
-        style: ElevatedButton.styleFrom(
-          padding: EdgeInsets.symmetric(vertical: 4.0, horizontal: 8.0),  // Reduced padding for smaller button
-          textStyle: TextStyle(fontSize: 10), // Smaller font size (set to 10)
-          minimumSize: Size(0, 30),  // Allow button to shrink
-        ),
-        onPressed: () async {
-          print("VIEW button pressed for: ${pdf.title}");
-          // Your logic for the view button...
-        },
-        child: Text("VIEW"),
-      ),
-    ),
-    SizedBox(height: 8),  // Space between buttons vertically
-    // Download Button
-    Flexible(
-      child: ElevatedButton(
-        style: ElevatedButton.styleFrom(
-          padding: EdgeInsets.symmetric(vertical: 4.0, horizontal: 8.0),  // Reduced padding for smaller button
-          textStyle: TextStyle(fontSize: 10), // Smaller font size (set to 10)
-          minimumSize: Size(0, 30),  // Allow button to shrink
-        ),
-        onPressed: () {
-          _downloadFile(pdf.url, pdf.title);
-        },
-        child: Text("DOWNLOAD"),
-      ),
-    ),
-  ],
-)
-
-
-
-
+            child:
+                _isLoadingPdfs
+                    ? Center(child: CircularProgressIndicator())
+                    : StreamBuilder<QuerySnapshot>(
+                      stream: firestore.collection('pdfs').snapshots(),
+                      builder: (context, snapshot) {
+                        if (snapshot.hasError) {
+                          print("Firestore error: ${snapshot.error}");
+                          return Center(
+                            child: Text(
+                              "Error loading PDFs: ${snapshot.error}",
+                              style: TextStyle(color: Color(0xFFD32F2F)),
                             ),
                           );
-                        },
-                      );
-                    },
-                  ),
+                        }
+                        if (!snapshot.hasData) {
+                          return Center(child: Text("Loading PDFs..."));
+                        }
+                        if (snapshot.connectionState ==
+                            ConnectionState.waiting) {
+                          return Center(child: CircularProgressIndicator());
+                        }
+                        List<PdfModel> pdfs = [];
+                        try {
+                          pdfs =
+                              snapshot.data!.docs.map((doc) {
+                                final data = doc.data() as Map<String, dynamic>;
+                                final String originalUrl = data['url'] ?? '';
+                                final String downloadUrl =
+                                    pdfDownloadUrls[doc.id] ?? originalUrl;
+                                return PdfModel(
+                                  title: data['title'] ?? 'Unknown Title',
+                                  url:
+                                      downloadUrl.isNotEmpty
+                                          ? downloadUrl
+                                          : originalUrl,
+                                  date: data['date'] as String?,
+                                  size:
+                                      data['size'] != null
+                                          ? data['size'].toString()
+                                          : null,
+                                );
+                              }).toList();
+                        } catch (e) {
+                          print("Error parsing PDFs: $e");
+                          return Center(
+                            child: Text(
+                              "Error parsing PDFs: $e",
+                              style: TextStyle(color: Color(0xFFD32F2F)),
+                            ),
+                          );
+                        }
+                        if (pdfs.isEmpty) {
+                          return Center(child: Text("No PDFs available"));
+                        }
+                        return ListView.builder(
+                          itemCount: pdfs.length,
+                          itemBuilder: (context, index) {
+                            PdfModel pdf = pdfs[index];
+                            return Card(
+                              margin: EdgeInsets.symmetric(
+                                vertical: 8,
+                                horizontal: 16,
+                              ),
+                              child: ListTile(
+                                leading: CircleAvatar(
+                                  backgroundColor: Color(
+                                    0xFF1A73E8,
+                                  ).withOpacity(0.1),
+                                  child: Icon(
+                                    Icons.book,
+                                    color: Color(0xFF1A73E8),
+                                  ),
+                                ),
+                                title: Text(
+                                  pdf.title,
+                                  style: TextStyle(fontWeight: FontWeight.bold),
+                                ),
+                                subtitle: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    SizedBox(height: 4),
+                                    Text(pdf.date ?? "March 2025"),
+                                    Text("Size: ${pdf.size ?? 'Unknown'}"),
+                                  ],
+                                ),
+                                trailing: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: <Widget>[
+                                    Flexible(
+                                      child: ElevatedButton(
+                                        style: ElevatedButton.styleFrom(
+                                          padding: EdgeInsets.symmetric(
+                                            vertical: 4.0,
+                                            horizontal: 8.0,
+                                          ),
+                                          textStyle: TextStyle(fontSize: 10),
+                                          minimumSize: Size(0, 30),
+                                        ),
+                                        onPressed: () async {
+                                          print(
+                                            "VIEW button pressed for: ${pdf.title}",
+                                          );
+                                          Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder:
+                                                  (context) => PdfViewerScreen(
+                                                    filePath:
+                                                        pdf.url, // Pass the Firebase Storage URL
+                                                  ),
+                                            ),
+                                          );
+                                        },
+                                        child: Text("VIEW"),
+                                      ),
+                                    ),
+                                    SizedBox(height: 8),
+                                    Flexible(
+                                      child: ElevatedButton(
+                                        style: ElevatedButton.styleFrom(
+                                          padding: EdgeInsets.symmetric(
+                                            vertical: 4.0,
+                                            horizontal: 8.0,
+                                          ),
+                                          textStyle: TextStyle(fontSize: 10),
+                                          minimumSize: Size(0, 30),
+                                        ),
+                                        onPressed: () {
+                                          _downloadFile(
+                                            pdf.url,
+                                            pdf.title,
+                                            context,
+                                          ); // Pass context
+                                        },
+                                        child: Text("DOWNLOAD"),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        );
+                      },
+                    ),
           ),
         ],
       ),

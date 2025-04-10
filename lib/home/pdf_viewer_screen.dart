@@ -67,7 +67,8 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
           });
         } else {
           setState(() {
-            _errorMessage = "Failed to download PDF. Status code: ${response.statusCode}";
+            _errorMessage =
+                "Failed to download PDF. Status code: ${response.statusCode}";
           });
         }
       }
@@ -83,7 +84,8 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
       print("Error in PdfViewerScreen: $error");
     } finally {
       setState(() {
-        _isLoading = false; // Set loading to false when done (success or failure)
+        _isLoading =
+            false; // Set loading to false when done (success or failure)
       });
     }
   }
@@ -92,49 +94,55 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text("PDF Viewer")),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator()) //Show loading indicator
-          : _errorMessage.isNotEmpty
+      body:
+          _isLoading
+              ? const Center(
+                child: CircularProgressIndicator(),
+              ) //Show loading indicator
+              : _errorMessage.isNotEmpty
               ? Center(
-                  child: Text(
-                    _errorMessage,
-                    style: const TextStyle(color: Color(0xFFD32F2F)),
-                  ),
-                )
+                child: Text(
+                  _errorMessage,
+                  style: const TextStyle(color: Color(0xFFD32F2F)),
+                ),
+              )
               : kIsWeb
-                  ? _downloadUrl == null
-                      ? const Center(child: CircularProgressIndicator()) // This should not occur because of the isLoading implementation
-                      : const Center(
-                          child: Text(
-                            "PDF opened in browser. If it didn't open, click below.",
-                            textAlign: TextAlign.center,
-                          ),
-                        )
-                  : _localPath == null
-                      ? const Center(child: CircularProgressIndicator())
-                      : PDFView(
-                          filePath: _localPath!,
-                          onError: (error) {
-                            setState(() {
-                              _errorMessage = "Error rendering PDF: $error";
-                            });
-                          },
-                        ),
-      floatingActionButton: kIsWeb && _downloadUrl != null
-          ? FloatingActionButton(
-              onPressed: () async {
-                final uri = Uri.parse(_downloadUrl!);
-                if (await canLaunchUrl(uri)) {
-                  await launchUrl(uri, mode: LaunchMode.externalApplication);
-                } else {
+              ? _downloadUrl == null
+                  ? const Center(
+                    child: CircularProgressIndicator(),
+                  ) // This should not occur because of the isLoading implementation
+                  : const Center(
+                    child: Text(
+                      "PDF opened in browser. If it didn't open, click below.",
+                      textAlign: TextAlign.center,
+                    ),
+                  )
+              : _localPath == null
+              ? const Center(child: CircularProgressIndicator())
+              : PDFView(
+                filePath: _localPath!,
+                onError: (error) {
                   setState(() {
-                    _errorMessage = "Cannot launch URL";
+                    _errorMessage = "Error rendering PDF: $error";
                   });
-                }
-              },
-              child: const Icon(Icons.open_in_browser),
-            )
-          : null,
+                },
+              ),
+      floatingActionButton:
+          kIsWeb && _downloadUrl != null
+              ? FloatingActionButton(
+                onPressed: () async {
+                  final uri = Uri.parse(_downloadUrl!);
+                  if (await canLaunchUrl(uri)) {
+                    await launchUrl(uri, mode: LaunchMode.externalApplication);
+                  } else {
+                    setState(() {
+                      _errorMessage = "Cannot launch URL";
+                    });
+                  }
+                },
+                child: const Icon(Icons.open_in_browser),
+              )
+              : null,
     );
   }
 }
