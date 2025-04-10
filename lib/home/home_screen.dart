@@ -29,7 +29,7 @@ class _HomeScreenState extends State<HomeScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 5, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
     firestore = FirebaseFirestore.instance;
     storage = FirebaseStorage.instance;
     try {
