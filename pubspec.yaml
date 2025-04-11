@@ -19,7 +19,7 @@ dependencies:
     sdk: flutter
   # --- ADDED Firebase Core (Usually required) ---
   firebase_core: ^3.1.0 # Or latest version
-
+  firebase_storage: ^12.0.1 # Or latest Firebase Storage
   # --- Your Existing Dependencies (Correctly Indented) ---
   firebase_auth: ^5.1.0 # Or latest version
   cloud_firestore: ^5.0.1 # Or latest version
@@ -53,7 +53,7 @@ flutter_launcher_icons:
   android: true # Generate Android icons
   ios: true # Generate iOS icons
   # --- IMPORTANT: Use PNG, not JPEG for icons ---
-  image_path: "assets/icon/app_icon.jpeg" # Make sure this file exists and is a PNG
+  image_path: "assets/icon/MedMle Expert.jpg" # Make sure this file exists and is a PNG
   min_sdk_android: 21 # Optional: If you need adaptive icons, set min SDK to 26+
   # Optional: Adaptive Icons for Android 8.0+ (Oreo)
   # adaptive_icon_background: "#FFFFFF" # Color for background layer (or path to image asset)
