@@ -5,90 +5,65 @@ description: "A new Flutter project."
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 
 # The following defines the version and build number for your application.
-# A version number is three numbers separated by dots, like 1.2.43
-# followed by an optional build number separated by a +.
-# Both the version and the builder number may be overridden in flutter
-# build by specifying --build-name and --build-number, respectively.
-# In Android, build-name is used as versionName while build-number used as versionCode.
-# Read more about Android versioning at https://developer.android.com/studio/publish/versioning
-# In iOS, build-name is used as CFBundleShortVersionString while build-number is used as CFBundleVersion.
-# Read more about iOS versioning at
-# https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
-# In Windows, build-name is used as the major, minor, and patch parts
-# of the product and file versions while build-number is used as the build suffix.
+# ... version comments ...
 version: 1.0.0+1
 
 environment:
-  sdk: ^3.7.2
+  # --- ADJUST SDK CONSTRAINT IF NEEDED based on your Flutter version ---
+  # sdk: '>=3.0.0 <4.0.0' # Example for Flutter 3.10+
+  sdk: '>=3.4.0 <4.0.0' # Example for Flutter 3.22+ (Choose appropriate)
 
 # Dependencies specify other packages that your package needs in order to work.
-# To automatically upgrade your package dependencies to the latest versions
-# consider running `flutter pub upgrade --major-versions`. Alternatively,
-# dependencies can be manually updated by changing the version numbers below to
-# the latest version available on pub.dev. To see which dependencies have newer
-# versions available, run `flutter pub outdated`.
 dependencies:
   flutter:
     sdk: flutter
-  firebase_core: ^3.13.0
-  firebase_auth: ^5.5.2
-  cloud_firestore: ^5.6.6
-  firebase_storage: ^12.4.5
-  firebase_database: ^11.1.4
-  file_picker: ^10.0.0
-  in_app_purchase: ^3.1.10
+  # --- ADDED Firebase Core (Usually required) ---
+  firebase_core: ^3.1.0 # Or latest version
+
+  # --- Your Existing Dependencies (Correctly Indented) ---
+  firebase_auth: ^5.1.0 # Or latest version
+  cloud_firestore: ^5.0.1 # Or latest version
+  firebase_database: ^11.0.0 # Or latest version (Check compatibility)
+  file_picker: ^8.0.5 # Or latest version
+  # in_app_purchase: ^3.1.10 # Uncomment if needed
   provider: ^6.1.2
-  intl: ^0.20.2
-  shared_preferences: ^2.2.2
-  purchases_flutter: ^8.7.0
-  flutter_pdfview: ^1.3.2    # For PDF viewing
-  http: ^1.2.2              # For downloading the PDF
-  path_provider: ^2.1.4     # For accessing temporary directory
+  intl: ^0.19.0 # Or latest version
+  shared_preferences: ^2.2.3 # Or latest version
+  # purchases_flutter: ^8.7.0 # Uncomment if needed
+  flutter_pdfview: ^1.3.2
+  http: ^1.2.2
+  path_provider: ^2.1.4
   url_launcher: ^6.3.1
-  permission_handler: ^12.0.0+1
-  dio: ^5.8.0+1
-  syncfusion_flutter_pdfviewer: ^29.1.37
+  permission_handler: ^11.3.1 # Or latest version
+  device_info_plus: ^10.1.0 # Or latest version
+  # dio: ^5.8.0+1 # Uncomment if needed
+  # syncfusion_flutter_pdfviewer: ^29.1.37 # Uncomment if needed
   flutter_file_downloader: ^2.1.0
+  # Add other dependencies here
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^5.0.0
+  flutter_lints: ^4.0.0 # Or latest linter version
+  flutter_launcher_icons: ^0.13.1 # Keep this here
 
+# --- flutter_launcher_icons configuration (Correctly Placed) ---
+# This section should be at the root level, same as 'dependencies' and 'dev_dependencies'
+flutter_launcher_icons:
+  android: true # Generate Android icons
+  ios: true # Generate iOS icons
+  # --- IMPORTANT: Use PNG, not JPEG for icons ---
+  image_path: "assets/icon/app_icon.jpeg" # Make sure this file exists and is a PNG
+  min_sdk_android: 21 # Optional: If you need adaptive icons, set min SDK to 26+
+  # Optional: Adaptive Icons for Android 8.0+ (Oreo)
+  # adaptive_icon_background: "#FFFFFF" # Color for background layer (or path to image asset)
+  # adaptive_icon_foreground: "assets/icon/app_icon_foreground.png" # Path to foreground layer image
+
+# --- flutter section (remains the same) ---
 flutter:
-
-  # The following line ensures that the Material Icons font is
-  # included with your application, so that you can use the icons in
-  # the material Icons class.
   uses-material-design: true
-
-  # To add assets to your application, add an assets section, like this:
   # assets:
-  #   - images/a_dot_burr.jpeg
-  #   - images/a_dot_ham.jpeg
-
-  # An image asset can refer to one or more resolution-specific "variants", see
-  # https://flutter.dev/to/resolution-aware-images
-
-  # For details regarding adding assets from package dependencies, see
-  # https://flutter.dev/to/asset-from-package
-
-  # To add custom fonts to your application, add a fonts section here,
-  # in this "flutter" section. Each entry in this list should have a
-  # "family" key with the font family name, and a "fonts" key with a
-  # list giving the asset and other descriptors for the font. For
-  # example:
+  #   - assets/icon/ # Make sure to declare your assets folder if using adaptive icons from assets
+  #   - assets/icon/app_icon.png # Or declare the specific icon file
   # fonts:
-  #   - family: Schyler
-  #     fonts:
-  #       - asset: fonts/Schyler-Regular.ttf
-  #       - asset: fonts/Schyler-Italic.ttf
-  #         style: italic
-  #   - family: Trajan Pro
-  #     fonts:
-  #       - asset: fonts/TrajanPro.ttf
-  #       - asset: fonts/TrajanPro_Bold.ttf
-  #         weight: 700
-  #
-  # For details regarding fonts from package dependencies,
-  # see https://flutter.dev/to/font-from-package
+  #   - family: ...
