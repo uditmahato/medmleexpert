@@ -1,23 +1,31 @@
-import 'package:purchases_flutter/purchases_flutter.dart';
+import 'package:flutter/material.dart'; // Import foundation if needed, or remove if not
 
-Future<bool> isSubscribed() async {
-  CustomerInfo customerInfo = await Purchases.getCustomerInfo(); // Updated
-  return customerInfo.entitlements.active.containsKey("premium_access");
+// A simple class to hold subscription details
+class SubscriptionDetails {
+  final DateTime endDate;
+  final String package;
+  final bool isActive; // Derived property
+
+  SubscriptionDetails({required this.endDate, required this.package})
+    : isActive = endDate.isAfter(DateTime.now()); // Calculate active status
 }
 
-Future<int?> getRemainingDays() async {
-  CustomerInfo customerInfo = await Purchases.getCustomerInfo(); // Updated
-  if (customerInfo.entitlements.active.containsKey("premium_access")) {
-    DateTime? expirationDate =
-        customerInfo.entitlements.active["premium_access"]?.expirationDate;
-    if (expirationDate != null) {
-      return expirationDate.difference(DateTime.now()).inDays;
-    }
+class SubscriptionService {
+  // Method to get the static subscription details
+  SubscriptionDetails getStaticSubscriptionDetails() {
+    // --- DEFINE YOUR STATIC DATA HERE ---
+    // Example: Subscription valid for 30 days from today
+    final staticEndDate = DateTime.now().add(const Duration(days: 365));
+    const staticPackage = 'Static VIP Plan'; // Example package name
+    // ------------------------------------
+
+    print(
+      "Returning static subscription data: EndDate=$staticEndDate, Package=$staticPackage",
+    );
+
+    return SubscriptionDetails(endDate: staticEndDate, package: staticPackage);
   }
-  return null;
-}
 
-Future<List<Package>> getSubscriptionPackages() async {
-  Offerings offerings = await Purchases.getOfferings();
-  return offerings.current?.availablePackages ?? [];
+  // You could add methods here later to fetch real data if needed
+  // Future<SubscriptionDetails> fetchRealSubscriptionDetails(String userId) async { ... }
 }

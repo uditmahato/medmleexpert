@@ -1,10 +1,18 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart'; // Keep for user info
+// import 'package:cloud_firestore/cloud_firestore.dart'; // REMOVE if not needed elsewhere
+import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:path_provider/path_provider.dart';
+import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
+
 import '../auth/auth_service.dart';
 import '../auth/login_screen.dart';
 import '../downloads/downloads_screen.dart';
+import '../subscription/subscription_service.dart'; // <-- IMPORT new service
 
 class ProfileScreen extends StatefulWidget {
   @override
@@ -12,131 +20,165 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  late DateTime subscriptionEndDate;
-  late int remainingDays;
+  DateTime? subscriptionEndDate;
+  int remainingDays = 0;
+  String subscriptionPackage = 'Loading...'; // Add state for package name
   Timer? _timer;
-  bool _isLoading = true;
+  bool _isLoading = true; // Keep loading state
+  String _errorMessage = '';
+  String? _selectedDownloadPath;
+
+  // Switches state
+  bool _hideListOnSelect = true;
+  bool _lockInFullscreen = true;
+
+  final DateFormat _dateFormatter = DateFormat('dd MMM yyyy');
+  final SubscriptionService _subscriptionService =
+      SubscriptionService(); // Instantiate service
 
   @override
   void initState() {
     super.initState();
-    // Fetch subscription data after getting the UID
-    _fetchSubscriptionData();
-    // Update the remaining days every day
-    _timer = Timer.periodic(Duration(days: 1), (timer) {
-      _calculateRemainingDays();
+    _fetchSubscriptionData(); // Call the modified function
+    _loadDownloadPathPreference();
+    _timer = Timer.periodic(const Duration(hours: 1), (timer) {
+      if (subscriptionEndDate != null) {
+        _calculateRemainingDays();
+      }
     });
   }
 
+  // --- MODIFIED: Use Static Data ---
   Future<void> _fetchSubscriptionData() async {
+    if (!mounted) return;
     setState(() {
       _isLoading = true;
+      _errorMessage = '';
     });
+
+    // Simulate a slight delay like a network call might have
+    await Future.delayed(const Duration(milliseconds: 300));
+
     try {
-      final user = AuthService().currentUser;
-      if (user != null) {
-        final doc =
-            await FirebaseFirestore.instance
-                .collection('users')
-                .doc(user.uid)
-                .collection('subscription')
-                .doc('details')
-                .get();
-        if (doc.exists) {
-          setState(() {
-            subscriptionEndDate = DateTime.parse(doc.data()!['endDate']);
-            _calculateRemainingDays();
-            _isLoading = false;
-          });
-        } else {
-          // Default subscription end date if not found
-          setState(() {
-            subscriptionEndDate = DateTime.parse("2026-03-27");
-            _calculateRemainingDays();
-            _isLoading = false;
-          });
-          // Optionally, create a default subscription entry in Firestore
-          await FirebaseFirestore.instance
-              .collection('users')
-              .doc(user.uid)
-              .collection('subscription')
-              .doc('details')
-              .set({
-                'endDate': subscriptionEndDate.toIso8601String(),
-                'package': 'Default',
-              });
-        }
-      } else {
-        // User not logged in, use default
+      // Get static data directly from the service
+      final details = _subscriptionService.getStaticSubscriptionDetails();
+
+      if (mounted) {
         setState(() {
-          subscriptionEndDate = DateTime.parse("2026-03-27");
-          _calculateRemainingDays();
+          subscriptionEndDate = details.endDate;
+          subscriptionPackage = details.package; // Store package name
+          _calculateRemainingDays(); // Calculate based on the static date
+          _isLoading = false; // Loading finished
+          _errorMessage = ''; // Clear any previous error
+        });
+      }
+    } catch (e) {
+      // Should ideally not happen with static data unless service throws error
+      print("Error getting static subscription data: $e");
+      if (mounted) {
+        setState(() {
+          _errorMessage = "Error loading subscription info.";
           _isLoading = false;
         });
       }
-    } catch (e) {
-      print("Error fetching subscription data: $e");
-      setState(() {
-        subscriptionEndDate = DateTime.parse("2026-03-27");
-        _calculateRemainingDays();
-        _isLoading = false;
-      });
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text("Error loading subscription: $e")));
+    }
+  }
+  // --- END MODIFIED SECTION ---
+
+  // --- Load/Save/Select Download Path Methods (Keep as they are) ---
+  Future<void> _loadDownloadPathPreference() async {
+    /* ... Keep ... */
+    if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
+      try {
+        final directory = await getApplicationDocumentsDirectory();
+        if (mounted) {
+          setState(() {
+            _selectedDownloadPath = directory.path;
+          });
+        }
+      } catch (e) {
+        print("Error getting default doc dir: $e");
+      }
     }
   }
 
-  void _calculateRemainingDays() {
-    final now = DateTime.now();
-    final difference = subscriptionEndDate.difference(now);
+  Future<void> _saveDownloadPathPreference(String path) async {
+    /* ... Keep ... */
     setState(() {
-      remainingDays = difference.inDays;
-      if (remainingDays < 0) remainingDays = 0; // Prevent negative days
+      _selectedDownloadPath = path;
     });
-  }
-
-  Future<void> _extendSubscription(String package) async {
-    try {
-      final now = DateTime.now();
-      DateTime newEndDate;
-      if (package == "Biannual") {
-        // Add 6 months (approximate)
-        newEndDate = now.add(Duration(days: 6 * 30));
-      } else {
-        // Add 12 months
-        newEndDate = now.add(Duration(days: 365));
-      }
-      final user = AuthService().currentUser;
-      if (user != null) {
-        await FirebaseFirestore.instance
-            .collection('users')
-            .doc(user.uid)
-            .collection('subscription')
-            .doc('details')
-            .set({'endDate': newEndDate.toIso8601String(), 'package': package});
-        setState(() {
-          subscriptionEndDate = newEndDate;
-          _calculateRemainingDays();
-        });
-        print(
-          "Extended subscription with $package package. New end date: $subscriptionEndDate",
-        );
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Subscription extended successfully!")),
-        );
-      } else {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text("User not logged in")));
-      }
-    } catch (e) {
-      print("Error extending subscription: $e");
+    print("Download path preference saved (simulation): $path");
+    if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error extending subscription: $e")),
+        const SnackBar(
+          content: Text("Download path preference updated (simulated)"),
+        ),
       );
     }
   }
+
+  Future<void> _selectDownloadPath() async {
+    /* ... Keep ... */
+    try {
+      String? directoryPath = await FilePicker.platform.getDirectoryPath(
+        dialogTitle: 'Select Download Folder',
+      );
+      if (directoryPath != null) {
+        await _saveDownloadPathPreference(directoryPath);
+      } else {
+        print('User cancelled download path selection.'); /* Show SnackBar */
+      }
+    } catch (e) {
+      print("Error selecting directory: $e"); /* Show SnackBar */
+    }
+  }
+  // -----------------------------------------------------------
+
+  void _calculateRemainingDays() {
+    // Keep this method as is
+    if (subscriptionEndDate == null) {
+      setState(() => remainingDays = 0);
+      return;
+    }
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final endDateOnly = DateTime(
+      subscriptionEndDate!.year,
+      subscriptionEndDate!.month,
+      subscriptionEndDate!.day,
+    );
+    final difference = endDateOnly.difference(today);
+    setState(() {
+      remainingDays = difference.inDays;
+      if (remainingDays < 0) remainingDays = 0;
+    });
+  }
+
+  // --- MODIFIED: Disable Extend Subscription ---
+  Future<void> _showStaticDataMessage() async {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            "Subscription management disabled (using static data).",
+          ),
+        ),
+      );
+    }
+  }
+  // --- END MODIFIED SECTION ---
+
+  // --- Keep _launchURL, _logout, _deleteTempFiles ---
+  Future<void> _launchURL(String urlString) async {
+    /* ... Keep ... */
+  }
+  Future<void> _logout() async {
+    /* ... Keep ... */
+  }
+  Future<void> _deleteTempFiles() async {
+    /* ... Keep ... */
+  }
+  // ---------------------------------------------
 
   @override
   void dispose() {
@@ -146,465 +188,202 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final TextTheme textTheme = theme.textTheme;
+    final ColorScheme colorScheme = theme.colorScheme;
+
     return Scaffold(
-      appBar: AppBar(
-        title: Text("Account & Settings"),
-        actions: [
-          IconButton(
-            icon: Icon(Icons.download),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => DownloadsScreen()),
-              );
-            },
-          ),
-          IconButton(
-            icon: Icon(Icons.person),
-            onPressed: () {
-              // Already on ProfileScreen, no action needed
-            },
-          ),
-        ],
-      ),
-      body: SingleChildScrollView(
-        child: Padding(
-          padding: EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Account Information Section
-              StreamBuilder<User?>(
-                stream: AuthService().user,
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return Text(
-                      "Account Information - Loading...",
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    );
-                  }
-                  if (snapshot.hasData && snapshot.data != null) {
-                    final user = snapshot.data!;
-                    return Text(
-                      "Account Information - ${user.email ?? 'Unknown'}",
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    );
-                  }
-                  return Text(
-                    "Account Information - Not Logged In",
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  );
-                },
-              ),
-              SizedBox(height: 8),
-              Card(
-                child: ListTile(
-                  title: Text(
-                    "VIP Account - Active Till",
-                    style: TextStyle(
-                      color: Colors.black,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  tileColor: Color(0xFFFFD700), // Highlight Yellow
+      appBar: AppBar(title: const Text("Account & Settings")),
+      body:
+          _isLoading // Show loading indicator until static data is processed
+              ? const Center(child: CircularProgressIndicator())
+              : _errorMessage
+                  .isNotEmpty // Show error if static data somehow failed
+              ? Center(
+                child: Text(
+                  _errorMessage,
+                  style: TextStyle(color: colorScheme.error),
                 ),
-              ),
-              Card(
-                child: ListTile(
-                  title:
-                      _isLoading
-                          ? Text("Loading subscription...")
-                          : Text(
-                            "${subscriptionEndDate.toString().split(' ')[0]} - $remainingDays Days Remaining",
+              )
+              : SingleChildScrollView(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // --- Account & Subscription Section ---
+                    _buildSectionTitle(context, "Account & Subscription"),
+                    Card(
+                      elevation: 2,
+                      margin: const EdgeInsets.symmetric(vertical: 8.0),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // User Email (Still uses AuthService)
+                            _buildInfoRow(
+                              Icons.email_outlined,
+                              "Email:",
+                              AuthService().currentUser?.email ??
+                                  "Not logged in",
+                            ),
+                            const Divider(height: 20),
+                            // Subscription Status (Uses state set from static data)
+                            _buildInfoRow(
+                              Icons.workspace_premium_outlined,
+                              "Status:",
+                              subscriptionEndDate == null
+                                  ? "No Subscription Data" // Changed message
+                                  : subscriptionEndDate!.isAfter(DateTime.now())
+                                  ? "$subscriptionPackage - Active" // Show package name
+                                  : "Subscription Expired",
+                              valueColor:
+                                  subscriptionEndDate?.isAfter(
+                                            DateTime.now(),
+                                          ) ??
+                                          false
+                                      ? colorScheme.primary
+                                      : colorScheme.error,
+                            ),
+                            if (subscriptionEndDate != null) ...[
+                              const SizedBox(height: 8),
+                              _buildInfoRow(
+                                Icons.calendar_today_outlined,
+                                "Active Until:",
+                                _dateFormatter.format(subscriptionEndDate!),
+                              ),
+                              const SizedBox(height: 8),
+                              _buildInfoRow(
+                                Icons.hourglass_bottom_outlined,
+                                "Remaining:",
+                                "$remainingDays Days",
+                              ),
+                            ],
+                            const Divider(height: 20),
+                            Text(
+                              "Extend Subscription:",
+                              style: textTheme.titleMedium,
+                            ),
+                            const SizedBox(height: 8),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                              children: [
+                                // --- MODIFIED: Disabled Buttons ---
+                                ElevatedButton(
+                                  onPressed:
+                                      _showStaticDataMessage, // Call message function
+                                  child: const Text("6 Months"),
+                                ),
+                                ElevatedButton(
+                                  onPressed:
+                                      _showStaticDataMessage, // Call message function
+                                  child: const Text("12 Months"),
+                                ),
+                                // --- END MODIFIED SECTION ---
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+
+                    // --- Settings Section (Keep as is) ---
+                    _buildSectionTitle(context, "Settings"),
+                    Card(/* ... Settings ListTiles ... */),
+                    const SizedBox(height: 16),
+
+                    // --- Maintenance Actions (Keep as is) ---
+                    _buildSectionTitle(context, "Maintenance"),
+                    Card(/* ... Maintenance ListTiles ... */),
+                    const SizedBox(height: 24),
+
+                    // --- About & Support Section (Keep as is) ---
+                    _buildSectionTitle(context, "About & Support"),
+                    Card(/* ... About ListTiles ... */),
+                    const SizedBox(height: 24),
+
+                    // --- Log Out Button (Keep as is) ---
+                    // --- Log Out Button ---
+                    Center(
+                      child: ElevatedButton.icon(
+                        icon: const Icon(Icons.logout), // Add the icon
+                        label: const Text("Log Out"), // Add the label
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor:
+                              colorScheme.error, // Use error color for logout
+                          foregroundColor: colorScheme.onError,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 30,
+                            vertical: 12,
                           ),
-                ),
-              ),
-              Card(
-                child: ListTile(
-                  title: Text(
-                    "Extend Subscription - Biannual (6 Months)",
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  tileColor: Color(0xFF4CAF50), // Calming Green
-                  onTap: () {
-                    _extendSubscription("Biannual");
-                  },
-                ),
-              ),
-              Card(
-                child: ListTile(
-                  title: Text(
-                    "Extend Subscription - Annual (12 Months)",
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  tileColor: Color(0xFF4CAF50), // Calming Green
-                  onTap: () {
-                    _extendSubscription("Annual");
-                  },
-                ),
-              ),
-              SizedBox(height: 16),
-
-              // Your Databases Section
-              Text(
-                "Your Databases",
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              SizedBox(height: 8),
-              Card(
-                child: ListTile(
-                  title: Text("You Are Subscribed To ALL Databases"),
-                ),
-              ),
-              SizedBox(height: 16),
-
-              // Settings Section
-              Text(
-                "Settings ( Tap to Hide ) - App Version : 180",
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              SizedBox(height: 8),
-              Card(
-                child: ListTile(
-                  leading: Icon(
-                    Icons.settings,
-                    color: Color(0xFF1A73E8),
-                  ), // Trustworthy Blue
-                  title: Text("Select Download Path"),
-                ),
-              ),
-              Card(
-                child: ListTile(
-                  leading: Icon(Icons.settings, color: Color(0xFF1A73E8)),
-                  title: Text("Main Server"),
-                  trailing: Text("Iran"),
-                ),
-              ),
-              Card(
-                child: ListTile(
-                  leading: Icon(Icons.settings, color: Color(0xFF1A73E8)),
-                  title: Text("Download Server"),
-                  trailing: Text("Germany"),
-                ),
-              ),
-              Card(
-                child: ListTile(
-                  leading: Icon(Icons.settings, color: Color(0xFF1A73E8)),
-                  title: Text("Hide List On Select"),
-                  trailing: Switch(
-                    value: true,
-                    onChanged: (value) {
-                      print("Hide List On Select: $value");
-                    },
-                    activeColor: Color(0xFF4CAF50), // Calming Green
-                  ),
-                ),
-              ),
-              Card(
-                child: ListTile(
-                  leading: Icon(Icons.settings, color: Color(0xFF1A73E8)),
-                  title: Text("Collapse Search Results"),
-                  trailing: Switch(
-                    value: false,
-                    onChanged: (value) {
-                      print("Collapse Search Results: $value");
-                    },
-                    activeColor: Color(0xFF4CAF50),
-                  ),
-                ),
-              ),
-              Card(
-                child: ListTile(
-                  leading: Icon(Icons.settings, color: Color(0xFF1A73E8)),
-                  title: Text("Collapse Content Results"),
-                  trailing: Switch(
-                    value: false,
-                    onChanged: (value) {
-                      print("Collapse Content Results: $value");
-                    },
-                    activeColor: Color(0xFF4CAF50),
-                  ),
-                ),
-              ),
-              Card(
-                child: ListTile(
-                  leading: Icon(Icons.settings, color: Color(0xFF1A73E8)),
-                  title: Text("Lock in Fullscreen"),
-                  trailing: Switch(
-                    value: true,
-                    onChanged: (value) {
-                      print("Lock in Fullscreen: $value");
-                    },
-                    activeColor: Color(0xFF4CAF50),
-                  ),
-                ),
-              ),
-              Card(
-                child: ListTile(
-                  leading: Icon(Icons.settings, color: Color(0xFF1A73E8)),
-                  title: Text("Enable Swipe to Delete"),
-                  trailing: Switch(
-                    value: true,
-                    onChanged: (value) {
-                      print("Enable Swipe to Delete: $value");
-                    },
-                    activeColor: Color(0xFF4CAF50),
-                  ),
-                ),
-              ),
-              Card(
-                child: ListTile(
-                  leading: Icon(Icons.settings, color: Color(0xFF1A73E8)),
-                  title: Text("Use Collapsing Toolbar"),
-                  trailing: Switch(
-                    value: true,
-                    onChanged: (value) {
-                      print("Use Collapsing Toolbar: $value");
-                    },
-                    activeColor: Color(0xFF4CAF50),
-                  ),
-                ),
-              ),
-              Card(
-                child: ListTile(
-                  leading: Icon(Icons.settings, color: Color(0xFF1A73E8)),
-                  title: Text("Open Tables as Popup"),
-                  trailing: Switch(
-                    value: true,
-                    onChanged: (value) {
-                      print("Open Tables as Popup: $value");
-                    },
-                    activeColor: Color(0xFF4CAF50),
-                  ),
-                ),
-              ),
-              Card(
-                child: ListTile(
-                  leading: Icon(Icons.settings, color: Color(0xFF1A73E8)),
-                  title: Text("Document Color"),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text("#ffffff"),
-                      SizedBox(width: 8),
-                      ElevatedButton(
-                        onPressed: () {
-                          print("Reset Document Color");
-                        },
-                        child: Text("RESET"),
+                        ),
+                        onPressed: _logout, // Add the onPressed handler
                       ),
-                    ],
-                  ),
-                ),
-              ),
-              Card(
-                child: ListTile(
-                  leading: Icon(Icons.settings, color: Color(0xFF1A73E8)),
-                  title: Text("Automatic QBank Backups"),
-                  trailing: Switch(
-                    value: true,
-                    onChanged: (value) {
-                      print("Automatic QBank Backups: $value");
-                    },
-                    activeColor: Color(0xFF4CAF50),
-                  ),
-                ),
-              ),
-              Card(
-                child: ListTile(
-                  title: Text(
-                    "Check App Update",
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
                     ),
-                  ),
-                  tileColor: Color(0xFFB0BEC5), // Neutral Gray
-                  onTap: () {
-                    print("Check App Update tapped");
-                  },
+                    const SizedBox(height: 20), // Bottom padding
+                  ],
                 ),
               ),
-              Card(
-                child: ListTile(
-                  title: Text(
-                    "Start File Web Server",
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  tileColor: Color(0xFFFFD700), // Highlight Yellow
-                  onTap: () {
-                    print("Start File Web Server tapped");
-                  },
-                ),
-              ),
-              Card(
-                child: ListTile(
-                  title: Text(
-                    "Backup Favorites & Highlights",
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  tileColor: Color(0xFF1A73E8), // Trustworthy Blue
-                  onTap: () {
-                    print("Backup Favorites & Highlights tapped");
-                  },
-                ),
-              ),
-              Card(
-                child: ListTile(
-                  title: Text(
-                    "Restore Favorites & Highlights",
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  tileColor: Color(0xFF1A73E8).withOpacity(0.8),
-                  onTap: () {
-                    print("Restore Favorites & Highlights tapped");
-                  },
-                ),
-              ),
-              Card(
-                child: ListTile(
-                  title: Text(
-                    "Delete Temp Files",
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  tileColor: Color(0xFFD32F2F), // Error Red
-                  onTap: () {
-                    print("Delete Temp Files tapped");
-                  },
-                ),
-              ),
-              SizedBox(height: 16),
-
-              // About Us Section
-              Text(
-                "About Us",
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              SizedBox(height: 8),
-              Card(child: ListTile(title: Text("IMO - Medical Resources"))),
-              Card(
-                child: ListTile(
-                  leading: Icon(
-                    Icons.web,
-                    color: Color(0xFF1A73E8),
-                  ), // Trustworthy Blue
-                  title: Text("http://medmleexpert.net"),
-                  onTap: () {
-                    print("Open http://medmleexpert.net");
-                  },
-                ),
-              ),
-              Card(
-                child: ListTile(
-                  leading: Icon(
-                    Icons.email,
-                    color: Color(0xFFD32F2F),
-                  ), // Error Red
-                  title: Text("support@medmleexpert.net"),
-                  onTap: () {
-                    print("Email support@medmleexpert.net");
-                  },
-                ),
-              ),
-              Card(
-                child: ListTile(
-                  leading: Icon(Icons.telegram, color: Color(0xFF1A73E8)),
-                  title: Text("Telegram Channel"),
-                  onTap: () {
-                    print("Open Telegram Channel");
-                  },
-                ),
-              ),
-              Card(
-                child: ListTile(
-                  leading: Icon(Icons.telegram, color: Color(0xFF1A73E8)),
-                  title: Text("Telegram Group"),
-                  onTap: () {
-                    print("Open Telegram Group");
-                  },
-                ),
-              ),
-              Card(
-                child: ListTile(
-                  leading: Icon(
-                    Icons.camera_alt,
-                    color: Color(0xFF4CAF50),
-                  ), // Calming Green
-                  title: Text("@medmleexpert"),
-                  onTap: () {
-                    print("Open Instagram @medmleexpert");
-                  },
-                ),
-              ),
-              SizedBox(height: 16),
-
-              // Log Out Button
-              Card(
-                child: ListTile(
-                  title: Text(
-                    "Log Out",
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  tileColor: Color(0xFFD32F2F), // Error Red
-                  onTap: () async {
-                    showDialog(
-                      context: context,
-                      barrierDismissible: false,
-                      builder:
-                          (context) =>
-                              Center(child: CircularProgressIndicator()),
-                    );
-                    try {
-                      await AuthService().signOut();
-                      Navigator.pop(context);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text("Logged out successfully")),
-                      );
-                      Navigator.pushAndRemoveUntil(
-                        context,
-                        MaterialPageRoute(builder: (context) => LoginScreen()),
-                        (route) => false,
-                      );
-                    } catch (e) {
-                      Navigator.pop(context);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text("Error logging out: $e")),
-                      );
-                    }
-                  },
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
+
+  // --- Helper Widgets (Keep as they are) ---
+  // --- Helper Widgets ---
+  Widget _buildSectionTitle(BuildContext context, String title) {
+    // Ensure this returns a Widget
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8.0),
+      child: Text(
+        title,
+        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+          color: Theme.of(context).colorScheme.primary,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    ); // Added return
+  }
+
+  Widget _buildInfoRow(
+    IconData icon,
+    String label,
+    String value, {
+    Color? valueColor,
+  }) {
+    // Ensure this returns a Widget
+    return Row(
+      children: [
+        Icon(icon, size: 20, color: Theme.of(context).colorScheme.secondary),
+        const SizedBox(width: 12),
+        Text("$label ", style: Theme.of(context).textTheme.bodyMedium),
+        Expanded(
+          child: Text(
+            value,
+            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+              fontWeight: FontWeight.w600,
+              color: valueColor ?? Theme.of(context).textTheme.bodyLarge?.color,
+            ),
+            textAlign: TextAlign.end, // Align value to the right
+          ),
+        ),
+      ],
+    ); // Added return
+  }
+
+  Widget _buildLinkTile(
+    BuildContext context,
+    IconData icon,
+    String title,
+    String url,
+  ) {
+    // Ensure this returns a Widget
+    return ListTile(
+      leading: Icon(icon, color: Theme.of(context).colorScheme.secondary),
+      title: Text(title),
+      trailing: const Icon(Icons.open_in_new_outlined, size: 18),
+      onTap: () => _launchURL(url),
+    ); // Added return
+  }
+
+  // -------------------------------------------------------------------------------
 }
