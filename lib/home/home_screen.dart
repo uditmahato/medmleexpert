@@ -1,10 +1,12 @@
 import 'dart:io';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../auth/auth_service.dart';
 import '../downloads/downloads_screen.dart';
 import '../profile/profile_screen.dart';
@@ -81,6 +83,57 @@ class _HomeScreenState extends State<HomeScreen>
     } catch (e) {
       print("Error fetching PDFs: $e");
       setState(() => _isLoadingPdfs = false);
+      Future<void> _downloadFile(
+        String url,
+        String filename,
+        BuildContext context,
+      ) async {
+        print("Starting download from URL: $url");
+        int retries = 3;
+        while (retries > 0) {
+          try {
+            final encodedUrl = Uri.encodeFull(url); // Encode URL
+            final http.Response response = await http.get(
+              Uri.parse(encodedUrl),
+              headers: {
+                'User-Agent': 'Flutter-Download-App',
+                'Accept': '*/*',
+                'Accept-Encoding': 'gzip, deflate, br',
+                'Connection': 'keep-alive',
+              },
+            );
+
+            if (response.statusCode == 200) {
+              final bytes = response.bodyBytes;
+              final directory = await getApplicationDocumentsDirectory();
+              final file = File('${directory.path}/$filename.pdf');
+              await file.writeAsBytes(bytes);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Downloaded ${filename}.pdf')),
+              );
+              return;
+            } else {
+              print("Download failed. Status code: ${response.statusCode}");
+              retries--;
+              if (retries == 0) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Download failed after multiple attempts.'),
+                  ),
+                );
+              }
+            }
+          } catch (e) {
+            retries--;
+            if (retries == 0) {
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(SnackBar(content: Text('Download failed: $e')));
+            }
+            await Future.delayed(Duration(seconds: 2)); // Delay before retry
+          }
+        }
+      }
     }
   }
 
@@ -118,9 +171,49 @@ class _HomeScreenState extends State<HomeScreen>
   ) async {
     print("Starting download from URL: $url");
     int retries = 3;
+
+    // --- Permission Request ---
+    print("Checking MANAGE storage permission status..."); // Change message
+    // Request the MANAGE permission
+    PermissionStatus permissionStatus =
+        await Permission.manageExternalStorage.status;
+    print("Initial permission status: $permissionStatus");
+
+    if (!permissionStatus.isGranted) {
+      print(
+        "MANAGE Storage permission is NOT granted. Requesting now...",
+      ); // Change message
+      // Request the MANAGE permission
+      permissionStatus = await Permission.manageExternalStorage.request();
+      print("Permission request result: $permissionStatus");
+
+      if (permissionStatus.isGranted) {
+        print(
+          "MANAGE Storage permission GRANTED after request!",
+        ); // Change message
+      } else {
+        // isDenied or permanentlyDenied (handle both simply for test)
+        print(
+          "MANAGE Storage permission DENIED after request. Showing snackbar.",
+        ); // Change message
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              // Adjust message if needed, e.g., 'All files access required...'
+              'Storage permission required to download files.',
+            ),
+          ),
+        );
+        return; // Stop download if permission not granted
+      }
+    } else {
+      print("MANAGE Storage permission ALREADY granted!"); // Change message
+    }
+    // --- Permission Request End ---
+
     while (retries > 0) {
       try {
-        final encodedUrl = Uri.encodeFull(url); // Encode URL
+        final encodedUrl = Uri.encodeFull(url);
         final http.Response response = await http.get(
           Uri.parse(encodedUrl),
           headers: {
@@ -133,20 +226,65 @@ class _HomeScreenState extends State<HomeScreen>
 
         if (response.statusCode == 200) {
           final bytes = response.bodyBytes;
-          final directory = await getApplicationDocumentsDirectory();
-          final file = File('${directory.path}/$filename.pdf');
-          await file.writeAsBytes(bytes);
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text('Downloaded ${filename}.pdf')));
-          return;
+
+          String? directoryPath = await FilePicker.platform.getDirectoryPath();
+          if (directoryPath == null) {
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(SnackBar(content: Text('Download cancelled')));
+            return;
+          }
+
+          print("Selected directory path: $directoryPath");
+          final file = File('$directoryPath/$filename.pdf');
+          print("File path for saving: ${file.path}");
+
+          try {
+            await file.writeAsBytes(bytes);
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Downloaded ${filename}.pdf to ${directoryPath}'),
+              ),
+            );
+            return;
+          } catch (fileWriteError) {
+            print("Error writing file: $fileWriteError");
+            String errorMessage = 'Error saving file: ';
+            if (fileWriteError is FileSystemException) {
+              if (fileWriteError.osError?.errorCode == 30) {
+                // Corrected to errorCode
+                errorMessage +=
+                    'Read-only directory selected. Please choose a different location.';
+              } else if (fileWriteError.osError?.errorCode == 1) {
+                // Corrected to errorCode
+                errorMessage +=
+                    'Permission denied. Please choose a directory where you have write access.';
+              } else if (fileWriteError.message.contains(
+                'No space left on device',
+              )) {
+                errorMessage +=
+                    'Not enough free space in the selected location.';
+              } else {
+                errorMessage +=
+                    'Unknown file system error: ${fileWriteError.message}';
+              }
+            } else {
+              errorMessage += 'Unknown error: $fileWriteError';
+            }
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(SnackBar(content: Text(errorMessage)));
+            return;
+          }
         } else {
           print("Download failed. Status code: ${response.statusCode}");
           retries--;
           if (retries == 0) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('Download failed after multiple attempts.'),
+                content: Text(
+                  'Download failed after multiple attempts. Status code: ${response.statusCode}',
+                ),
               ),
             );
           }
@@ -158,7 +296,7 @@ class _HomeScreenState extends State<HomeScreen>
             context,
           ).showSnackBar(SnackBar(content: Text('Download failed: $e')));
         }
-        await Future.delayed(Duration(seconds: 2)); // Delay before retry
+        await Future.delayed(Duration(seconds: 2));
       }
     }
   }
